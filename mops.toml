@@ -9,7 +9,7 @@ vector = "0.2.0"
 star = "0.1.1"
 rep-indy-hash = "0.1.1"
 account = "1.0.1"
-icrc1-mo = "../ICRC1.mo"
+icrc1-mo = "0.0.10"
 
 [dev-dependencies]
 test = "1.2.0"
@@ -21,4 +21,4 @@ name = "icrc4-mo"
 version = "0.0.1"
 description = "icrc4 for motoko"
 repository = "https://github.com/PanIndustrial-Org/icrc4.mo"
-keywords = [ "icrc4", "fungible", "token", "standard", "dfinity" ]
+keywords = [ "icrc4", "fungible", "token", "standard", "dfinity","batch" ]
