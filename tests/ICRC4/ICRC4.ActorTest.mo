@@ -2,12 +2,8 @@ import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import D "mo:base/Debug";
 import Int "mo:base/Int";
-import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
-import Nat8 "mo:base/Nat8";
-import Nat32 "mo:base/Nat32";
 import Nat64 "mo:base/Nat64";
-import Opt "mo:base/Option";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -17,10 +13,6 @@ import Fake "../fake";
 
 import Vec "mo:vector";
 import Star "mo:star/star";
-
-import Itertools "mo:itertools/Iter";
-import StableBuffer "mo:StableBuffer/StableBuffer";
-import Sha256 "mo:sha2/Sha256";
 
 import ActorSpec "../utils/ActorSpec";
 
@@ -47,7 +39,6 @@ module {
   let Vector = ICRC1.Vector;
 
   let e8s = 100000000;
-
 
     public func test() : async ActorSpec.Group {
         D.print("in test");
@@ -160,29 +151,29 @@ module {
           (icrc1, icrc4);
         };
 
-        let externalCanTransferBatchFalseSync = func ( notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), Text> {
+        let externalCanTransferBatchFalseSync = func ( notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
 
             
-                return #err("always false");
+                return #err([?#Err(#GenericError({message = "always false"; error_code = 0}))]);
              
             // This mock externalCanTransfer function always returns false,
             // indicating the transfer should not proceed.
             
         };
 
-        let externalCanTransferBatchFalseAsync = func (notification: ICRC4.TransferBatchNotification) : async* Star.Star<( notification: ICRC4.TransferBatchNotification), Text> {
+        let externalCanTransferBatchFalseAsync = func (notification: ICRC4.TransferBatchNotification) : async* Star.Star<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
             // This mock externalCanTransfer function always returns false,
             // indicating the transfer should not proceed.
             let fake = await Fake.Fake();
             
-            return #err(#awaited("always false"));
+            return #err(#awaited([?#Err(#GenericError({message = "always false"; error_code = 0}))]));
              
             
         };
 
-        let externalCanTransfeBatchUpdateSync = func (notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), Text> {
+        let externalCanTransfeBatchUpdateSync = func (notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
 
-            let transfers = Vec.new<ICRC4.TransferArg>();
+            let transfers = Vec.new<ICRC4.TransferArgs>();
             for(thisItem in notification.transfers.vals()){
               Vec.add(transfers, thisItem);
             };
@@ -191,6 +182,8 @@ module {
               amount = 2 * e8s;
               to = user3;
               fee = null;
+              created_at_time = null;
+              memo = null;
             });
             
 
@@ -199,9 +192,9 @@ module {
             });
         };
 
-        let externalCanTransferBatchUpdateAsync = func ( notification: ICRC4.TransferBatchNotification) : async* Star.Star<ICRC4.TransferBatchNotification, Text> {
+        let externalCanTransferBatchUpdateAsync = func ( notification: ICRC4.TransferBatchNotification) : async* Star.Star<ICRC4.TransferBatchNotification, ICRC4.TransferBatchResults> {
             let fake = await Fake.Fake();
-            let transfers = Vec.new<ICRC4.TransferArg>();
+            let transfers = Vec.new<ICRC4.TransferArgs>();
             for(thisItem in notification.transfers.vals()){
               Vec.add(transfers, thisItem);
             };
@@ -210,6 +203,8 @@ module {
               amount = 2 * e8s;
               to = user3;
               fee = null;
+              created_at_time = null;
+              memo = null;
             });
             
 
@@ -323,40 +318,42 @@ module {
                             mint_args
                         );
 
-                        let batchArgs = {
-                          memo = null;
-                          created_at_time = null;
-                          transfers = [{
+                        let batchArgs = [{
                             from_subaccount = user1.subaccount;
                             amount = 1 * e8s;
                             to = user2;
                             fee = null;
+                            memo = null;
+                            created_at_time = null;
                           },
                           {
                             from_subaccount = user1.subaccount;
                             amount = 1 * e8s;
                             to = user2;
                             fee = null;
+                            memo = null;
+                            created_at_time = null;
                           },
                           {
                             from_subaccount = user1.subaccount;
                             amount = 1 * e8s;
                             to = user2;
                             fee = null;
-                          }]
-                        };
+                            memo = null;
+                            created_at_time = null;
+                          }];
 
                         let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
 
                         D.print("result_test_batch was " # debug_show(result));
                         
-                        let #trappable(#Ok(result_array)) = result;
+                        let #trappable(result_array) = result;
 
-                        let #Ok(result1) = result_array[0].transfer_result;
+                        let ?#Ok(result1) = result_array[0];
 
-                        let #Ok(result2) = result_array[1].transfer_result;
+                        let ?#Ok(result2) = result_array[1];
 
-                        let #Ok(result3) = result_array[2].transfer_result;
+                        let ?#Ok(result3) = result_array[2];
 
                         
                         assertAllTrue([
@@ -374,22 +371,33 @@ module {
                         // Mint enough tokens to user1 for successful transfers
                         ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 300 * e8s; memo = null; created_at_time = null; });
 
-                        let batchArgs = {
-                            transfers =[
-                                { from_subaccount = user1.subaccount; to = user2; amount = 100 * e8s; fee = null }, // Success
-                                { from_subaccount = user1.subaccount; to = user3; amount = 250 * e8s; fee = null }, // Fail
-                                { from_subaccount = user1.subaccount; to = user2; amount = 50 * e8s; fee = null },  // Success
+                        let batchArgs = [
+                                { from_subaccount = user1.subaccount; 
+                                to = user2; 
+                                amount = 100 * e8s; 
+                                fee = null;
+                                memo = null;
+                                created_at_time = null; }, // Success
+                                { from_subaccount = user1.subaccount; 
+                                to = user3; 
+                                amount = 250 * e8s; 
+                                fee = null;
+                                memo = null;
+                                created_at_time = null; }, // Fail
+                                { from_subaccount = user1.subaccount; 
+                                to = user2; 
+                                amount = 50 * e8s; 
+                                fee = null;
+                                memo = null;
+                                created_at_time = null; },  // Success
                             ];
-                            memo = null;
-                            created_at_time = null;
-                        };
 
                         let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
-                        let #trappable(#Ok(result_array)) = result;
+                        let #trappable(result_array) = result;
 
-                        let #Ok(success1) = result_array[0].transfer_result;
-                        let #Err(insufficientFundsError) = result_array[1].transfer_result;
-                        let #Ok(success2) = result_array[2].transfer_result;
+                        let ?#Ok(success1) = result_array[0];
+                        let ?#Err(insufficientFundsError) = result_array[1];
+                        let ?#Ok(success2) = result_array[2];
 
                         assertAllTrue([
                             success1 == 1,
@@ -407,18 +415,20 @@ module {
                       ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 300 * e8s; memo = null; created_at_time = null; });
 
                       let incorrect_fee = 1 * e8s; // Less than base_fee, should cause BadFee error
-                      let batchArgs = {
-                          transfers = [
-                              { from_subaccount = user1.subaccount; to = user2; amount = 100 * e8s; fee = ?incorrect_fee },
+                      let batchArgs = [
+                              { from_subaccount = user1.subaccount;
+                               to = user2; 
+                               amount = 100 * e8s; 
+                               fee = ?incorrect_fee;
+                               memo = null;
+                                created_at_time = null },
                           ];
-                          memo = null;
-                          created_at_time = null;
-                      };
+                          
 
                       let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
-                      let #trappable(#Ok(result_array)) = result;
+                      let #trappable(result_array) = result;
 
-                      let #Err(badFeeError) = result_array[0].transfer_result;
+                      let ?#Err(badFeeError) = result_array[0];
                       
                       switch (badFeeError) {
                         case (#BadFee(_)) assertTrue(true);
@@ -446,21 +456,27 @@ module {
                       ignore await* icrc1.mint_tokens(canister.owner, { to = {user1 with subaccount = subaccount1}; amount = 200 * e8s; memo = null; created_at_time = null; });
                       ignore await* icrc1.mint_tokens(canister.owner, { to = {user1 with subaccount = subaccount2}; amount = 200 * e8s; memo = null; created_at_time = null; });
 
-                      let batchArgs = {
-                          memo = null;
-                          created_at_time = null;
-                          transfers =[
-                              { from_subaccount = subaccount1; to = user2; amount = 50 * e8s; fee = null },
-                              { from_subaccount = subaccount2; to = user3; amount = 100 * e8s; fee = null },
+                      let batchArgs = [
+                              { from_subaccount = subaccount1; 
+                              to = user2; 
+                              amount = 50 * e8s; 
+                              fee = null;
+                              memo = null;
+                              created_at_time = null; },
+                              { from_subaccount = subaccount2; 
+                              to = user3; 
+                              amount = 100 * e8s; 
+                              fee = null;
+                              memo = null;
+                              created_at_time = null; }
                           ];
-                      };
 
                       let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
                       D.print("result subaccounts " # debug_show(result));
-                      let #trappable(#Ok(result_array)) = result;
+                      let #trappable(result_array) = result;
 
-                      let #Ok(tx_index1) = result_array[0].transfer_result;
-                      let #Ok(tx_index2) = result_array[1].transfer_result;
+                      let ?#Ok(tx_index1) = result_array[0];
+                      let ?#Ok(tx_index2) = result_array[1];
 
                       let localtrx = icrc1.get_local_transactions();
 
@@ -488,21 +504,27 @@ module {
 
                     ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 200 * e8s; memo = null; created_at_time = null; });
 
-                    let batchArgs = {
-                        memo = null;
-                        created_at_time = null;
-                        transfers = [
-                            { from_subaccount = user1.subaccount; to = user2; amount = 10 * e8s; fee = null },
-                            { from_subaccount = user1.subaccount; to = user3; amount = 10 * e8s; fee = null },
-                        ]
-                    };
+                    let batchArgs = [
+                            { from_subaccount = user1.subaccount; 
+                            to = user2; 
+                            amount = 10 * e8s; 
+                            fee = null;
+                            memo = null;
+                            created_at_time = null; },
+                            { from_subaccount = user1.subaccount; 
+                            to = user3; 
+                            amount = 10 * e8s; 
+                            fee = null;
+                            memo = null;
+                            created_at_time = null; },
+                        ];
 
                     let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
                     D.print("too many " # debug_show(result));
                     switch (result) {
-                        case (#trappable(#Err(err))){
-                            switch (err) {
-                                case (#TooManyRequests(err)) {
+                        case (#trappable(err)){
+                            switch (err[0]) {
+                                case (?#Err(#TooManyRequests(err))) {
                                     assertTrue(err.limit==1);
                                 };
                                 case _ {
@@ -525,23 +547,24 @@ module {
 
                             let future_time = Nat64.add(Nat64.fromNat(Int.abs(Time.now())), 60_000_000_001); // 1 nano second more than default permitted drift
 
-                            let batchArgs = {
-                                memo = null;
-                                created_at_time = ?future_time;
-                                transfers = [
-                                    { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
+                            let batchArgs = [
+                                    { from_subaccount = user1.subaccount; 
+                                    to = user2; 
+                                    amount = 1 * e8s; 
+                                    fee = null;
+                                    memo = null;
+                                    created_at_time = ?future_time; },
                                 ];
-                            };
 
                             let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
 
                             D.print("in the future " # debug_show(result));
 
-                            let #trappable(#Err(result_err)) = result;
+                            let #trappable(result_err) = result;
                             
 
-                            switch (result_err) {
-                                case (#CreatedInFuture(_)) {
+                            switch (result_err[0]) {
+                                case (?#Err(#CreatedInFuture(_))) {
                                     assertTrue(true);
                                 };
                                 case _ {
@@ -559,21 +582,22 @@ module {
 
                           let past_time = Nat64.sub(Nat64.fromNat(Int.abs(Time.now())), 60_000_000_001 + 86_400_000_000_000); // 2 seconds behind
 
-                          let batchArgs = {
-                              memo = null;
-                              created_at_time = ?past_time;
-                              transfers = [
-                                  { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
+                          let batchArgs = [
+                                  { from_subaccount = user1.subaccount; 
+                                  to = user2; 
+                                  amount = 1 * e8s; 
+                                  fee = null;
+                                  memo = null;
+                                  created_at_time = ?past_time },
                               ];
-                          };
 
                           let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
 
                           D.print("in the past " # debug_show(result));
-                          let #trappable(#Err(result_err)) = result;
+                          let #trappable(result_err) = result;
 
-                          switch (result_err) {
-                              case (#TooOld) {
+                          switch (result_err[0]) {
+                              case (?#Err(#TooOld)) {
                                   assertTrue(true);
                               };
                               case _ {
@@ -595,31 +619,71 @@ module {
                       let created_at_time = Nat64.fromNat(Int.abs(Time.now()));
                       let memo = "deduplication_test";
 
-                      let batchArgs = {
-                          memo = ?Text.encodeUtf8(memo);
-                          created_at_time = ?created_at_time;
-                          transfers = [
-                              { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
+                      let batchArgs = [
+                              { from_subaccount = user1.subaccount; 
+                              to = user2; 
+                              amount = 1 * e8s; 
+                              fee = null;
+                              memo = ?Text.encodeUtf8(memo);
+                              created_at_time = ?created_at_time; },
+                              { from_subaccount = user1.subaccount; 
+                              to = user2; 
+                              amount = 1 * e8s; 
+                              fee = null;
+                              memo = ?Text.encodeUtf8(memo);
+                              created_at_time = ?created_at_time; },
                           ];
-                      };
 
                       // Do the first transfer
                       let resulta =  await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
+
                       D.print("result deduplicate a" # debug_show(resulta));
 
                       // Attempt the second transfer with the same created_at_time and memo to trigger duplicate
                       let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
 
                       D.print("result deduplicate " # debug_show(result));
-                      let #trappable(#Ok(result_array)) = result;
 
-                      switch (result_array[0].transfer_result) {
-                          case (#Err(#Duplicate { duplicate_of = _ })) {
-                              assertTrue(true);
+                      let #trappable(result_array1) = resulta;
+                      let #trappable(result_array2) = result;
+
+                      let dupe = switch (result_array1[0]) {
+                          case (?#Ok(val)) {
+                              
+                              val;
                           };
                           case _ {
                               //todo: fix once deduplication has been solved
-                              assertTrue(true); // A duplicate error was expected
+                              
+                              99999;
+                          };
+                      };
+
+                      switch (result_array1[1]) {
+                          case (?#Err(#Duplicate(err))) {
+                              ignore assertTrue(err.duplicate_of == dupe);
+                          };
+                          case _ {
+                              //todo: fix once deduplication has been solved
+                              ignore assertTrue(false); // an dupe was expected 
+                          };
+                      };
+                      switch (result_array2[0]) {
+                          case (?#Err(#Duplicate(err))) {
+                              ignore assertTrue(err.duplicate_of == dupe);
+                          };
+                          case _ {
+                              //todo: fix once deduplication has been solved
+                              ignore assertTrue(false); // an dupe was expected 
+                          };
+                      };
+                      switch (result_array2[1]) {
+                          case (?#Err(#Duplicate(err))) {
+                              assertTrue(err.duplicate_of == dupe);
+                          };
+                          case _ {
+                              //todo: fix once deduplication has been solved
+                              assertTrue(false); // an dupe was expected 
                           };
                       };
                   },
@@ -644,13 +708,11 @@ module {
                       ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 200 * e8s; memo = null; created_at_time = null; });
 
                       // Make a transfer batch request that uses the ICRC-4 fee override
-                      let batchArgs = {
-                          transfers = [
-                              { from_subaccount = user1.subaccount; to = user2; amount = 100 * e8s; fee = null },
+                      let batchArgs = [
+                              { from_subaccount = user1.subaccount; to = user2; amount = 100 * e8s; fee = null;
+                              memo = null;
+                          created_at_time = null; },
                           ];
-                          memo = null;
-                          created_at_time = null;
-                      };
 
                       D.print("trying batch ");
 
@@ -660,8 +722,8 @@ module {
                       D.print("fee override " # debug_show(result));
 
                       // Assess the fee used for the transfer
-                      let #trappable(#Ok(result_array)) = result;
-                      let #Ok(actual_fee_used) = result_array[0].transfer_result;
+                      let #trappable(result_array) = result;
+                      let ?#Ok(actual_fee_used) = result_array[0];
                       
                       let localtrx = icrc1.get_local_transactions();
 
@@ -680,7 +742,7 @@ module {
                         let dynamic_fee = 7000; // An example dynamic fee
                       
                         let default_icrc4_env = {
-                            get_fee : ?ICRC4.GetFee = ?(func(state : ICRC4.CurrentState, env: ICRC4.Environment, batchargs: ICRC4.TransferBatchArgs, trxargs: ICRC1.TransferArgs) : Nat {
+                            get_fee : ?ICRC4.GetFee = ?(func(state : ICRC4.CurrentState, env: ICRC4.Environment, batcharg: ICRC4.TransferBatchNotification, trxargs: ICRC1.TransferArgs) : Nat {
                                 return dynamic_fee;
                             });
                         };
@@ -693,18 +755,16 @@ module {
                         ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 200 * e8s; memo = null; created_at_time = null; });
 
                         // Prepare transfer batch request
-                        let batchArgs = {
-                            transfers = [
+                        let batchArgs = [
                                 { 
                                     from_subaccount = user1.subaccount;
                                     to = user2;
                                     amount = 100 * e8s;
-                                    fee = null
+                                    fee = null;
+                                    memo = null;
+                                    created_at_time = null;
                                 },
                             ];
-                            memo = null;
-                            created_at_time = null;
-                        };
 
                         // Attempt the batch transfer
                         let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
@@ -712,8 +772,8 @@ module {
                         D.print("environment fee " # debug_show(result));
 
                         // Assess the fee used for the transfer
-                        let #trappable(#Ok(result_array)) = result;
-                        let #Ok(actual_fee_used) = result_array[0].transfer_result;
+                        let #trappable(result_array) = result;
+                        let ?#Ok(actual_fee_used) = result_array[0];
                         
                         let localtrx = icrc1.get_local_transactions();
 
@@ -739,25 +799,23 @@ module {
                         ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 200 * e8s; memo = null; created_at_time = null; });
 
                         // Prepare transfer batch request
-                        let batchArgs = {
-                            transfers = [
+                        let batchArgs = [
                                 {
                                     from_subaccount = user1.subaccount;
                                     to = user2;
                                     amount = 100 * e8s;
-                                    fee = null // Fee not specified, expect to use ICRC-1 fee
+                                    fee = null; // Fee not specified, expect to use ICRC-1 fee
+                                    memo = null;
+                                    created_at_time = null;
                                 },
                             ];
-                            memo = null;
-                            created_at_time = null;
-                        };
 
                         // Attempt the batch transfer
                         let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
 
                         // Assess whether the expected global ICRC-1 fee was used
-                        let #trappable(#Ok(result_array)) = result;
-                        let #Ok(actual_fee_used) = result_array[0].transfer_result;
+                        let #trappable(result_array) = result;
+                        let ?#Ok(actual_fee_used) = result_array[0];
                         
                         let localtrx = icrc1.get_local_transactions();
 
@@ -768,77 +826,6 @@ module {
                         assertTrue(fee_used == ?{fee = ?default_icrc1_fee});
                     },
                 ),
-                it(
-                  "Valid memo propagation in a successful batch transfer",
-                  do {
-
-                      let fakeLedger = Vec.new<(ICRC1.Value, ?ICRC1.Value)>();
-
-
-                      // Mock add_transaction function and pass it to the environment
-                      let add_transaction = func (
-                          tx: ICRC1.Value,
-                          txTop: ?ICRC1.Value
-                      ): Nat {
-                          Vec.add(fakeLedger,(tx,txTop));
-                          // Simulate adding transaction to ICRC-3 transaction log
-                          return Vec.size(fakeLedger) - 1; // Mock transaction index
-                      };
-
-                      let (icrc1, icrc4) = get_icrc(default_token_args, ?{base_environment with add_ledger_transaction = ?add_transaction}, default_icrc4_args, null);
-
-                      
-                      // Mint enough tokens to user1 for successful transfers
-                      ignore await* icrc1.mint_tokens(canister.owner, { to = user1; amount = 300 * e8s; memo = null; created_at_time = null; });
-
-                      let memo = Text.encodeUtf8("test memo");
-                      let batchArgs = {
-                          transfers = [
-                              { from_subaccount = user1.subaccount; to = user2; amount = 100 * e8s; fee = null },
-                              { from_subaccount = user1.subaccount; to = user2; amount = 50 * e8s; fee = null },
-                          ];
-                          memo = ?memo;
-                          created_at_time = null;
-                      };
-
-                      let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, null);
-                      let #trappable(#Ok(result_array)) = result;
-
-                      D.print("memo prop" # debug_show(result));
-
-                      D.print("memo ledger" # debug_show(Vec.toArray(fakeLedger)));
-
-                      let #Map(firstTxHasMemo) = Vec.get(fakeLedger, 1).0;
-                      let ?#Map(secondTxHasMemoBlock) = Vec.get(fakeLedger, 2).1;
-
-                      var foundMemo : ?Blob = null;
-                      label search for(thisItem in firstTxHasMemo.vals()){
-                        if(thisItem.0 == "memo"){
-                          let #Blob(foundMemo_) = thisItem.1;
-                          foundMemo := ?foundMemo_;
-                          break search;
-                        };
-                      };
-
-                      D.print("found memo" # debug_show(foundMemo, memo , foundMemo == memo));
-
-                      var foundMemoBlock : ?Nat = null;
-                      label search for(thisItem in secondTxHasMemoBlock.vals()){
-                        if(thisItem.0 == "memo_block"){
-                          let #Nat(foundMemoBlock_) = thisItem.1;
-                          foundMemoBlock := ?foundMemoBlock_;
-                          break search;
-                        };
-                      };
-
-                      D.print("found block" # debug_show(foundMemoBlock, secondTxHasMemoBlock, foundMemoBlock == ?1));
-
-                      assertAllTrue([
-                          foundMemo == memo,
-                          foundMemoBlock == ?1,
-                      ]);
-                  },
-              ),
               it(
                 "Query balances of multiple accounts successfully",
                 do {
@@ -855,11 +842,9 @@ module {
                     let balances = icrc4.balance_of_batch(queryArgs);
 
                     // User3 has no tokens minted, so balance should be 0
-                    let expectedBalances = [(user1, 100 * e8s), (user2, 50 * e8s), (user3, 0)];
+                    let expectedBalances = [100 * e8s,  50 * e8s, 0];
 
-                    let balancesMatch = Array.equal<(Account, Nat)>(balances, expectedBalances, func(a, b): Bool {
-                        return (a.1 == b.1) and (ICRC1.account_eq(a.0, b.0));
-                    });
+                    let balancesMatch = Array.equal<Nat>(balances, expectedBalances, Nat.equal);
 
                     assertTrue(balancesMatch);
                 },
@@ -897,14 +882,14 @@ module {
                   let mint =  await* icrc1.mint_tokens(canister.owner,
                   { to = user1; amount = tx_amount; memo = null; created_at_time = null; });
 
-                  let batchArgs = {
-                      memo = null;
-                      created_at_time = null;
-                      transfers = [
-                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                          { from_subaccount = user1.subaccount; to = user3; amount = 1 * e8s; fee = null },
+                  let batchArgs = [
+                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
+                          { from_subaccount = user1.subaccount; to = user3; amount = 1 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
                       ];
-                  };
 
                   let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, ?#Sync(externalCanTransferBatchFalseSync));
 
@@ -912,7 +897,9 @@ module {
 
                   D.print("reject sync " # debug_show(result));
 
-                  let #trappable(#Err(#GenericError(res))) = result;
+                  let #err(#trappable(list)) = result;
+
+                  let ?#Err(#GenericError(res)) = list[0];
 
                   assertTrue(res.message == "always false");
               }),
@@ -926,22 +913,21 @@ module {
                   let mint =  await* icrc1.mint_tokens(canister.owner,
                   { to = user1; amount = tx_amount; memo = null; created_at_time = null; });
                   
-                  let batchArgs = {
-                      memo = null;
-                      created_at_time = null;
-                      transfers = [
-                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                          { from_subaccount = user1.subaccount; to = user3; amount = 1 * e8s; fee = null },
+                  let batchArgs = [
+                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
+                          { from_subaccount = user1.subaccount; to = user3; amount = 1 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
                       ];
-                  };
 
                   let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, ?#Async(externalCanTransferBatchFalseAsync));
 
-              
-
                   D.print("reject async " # debug_show(result));
 
-                  let #awaited(#Err(#GenericError(res))) = result;
+                  let #err(#awaited(list)) = result;
+                  let ?#Err(#GenericError(res)) = list[0];
 
                   assertTrue(res.message == "always false");
               }),
@@ -954,14 +940,14 @@ module {
 
                   let mint =  await* icrc1.mint_tokens(canister.owner, { to = user1; amount = tx_amount; memo = null; created_at_time = null; });
                   
-                  let batchArgs = {
-                      memo = null;
-                      created_at_time = null;
-                      transfers = [
-                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                          { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null },
+                  let batchArgs = [
+                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
+                          { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
                       ];
-                  };
 
                   let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, ?#Sync(externalCanTransfeBatchUpdateSync));
 
@@ -969,14 +955,14 @@ module {
 
                   D.print("update sync " # debug_show(result));
 
-                  let #trappable(#Ok(res)) = result;
+                  let #trappable(res) = result;
                   let ledger = Vector.toArray(icrc1.get_local_transactions());
                   let ?trn = ledger[1].transfer;
 
                     assertAllTrue([
-                    res[0].transfer_result == #Ok(1),
-                    res[1].transfer_result == #Ok(2),
-                    res[2].transfer_result == #Ok(3),
+                    res[0] == ?#Ok(1),
+                    res[1] == ?#Ok(2),
+                    res[2] == ?#Ok(3),
                     ledger[2].transfer == ?{amount = 2 * e8s; to = user3}
                   ]);
               }),
@@ -989,14 +975,14 @@ module {
 
                   let mint =  await* icrc1.mint_tokens( canister.owner, { to = user1; amount = tx_amount; memo = null; created_at_time = null; },);
                   
-                  let batchArgs = {
-                      memo = null;
-                      created_at_time = null;
-                      transfers = [
-                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                          { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null },
+                  let batchArgs = [
+                          { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
+                          { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null;
+                          memo = null;
+                          created_at_time = null; },
                       ];
-                  };
 
                   let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, null, ?#Async(externalCanTransferBatchUpdateAsync));
 
@@ -1004,14 +990,14 @@ module {
 
                   D.print("update async " # debug_show(result));
 
-                  let #awaited(#Ok(res)) = result;
+                  let #awaited(res) = result;
                   let ledger = Vector.toArray(icrc1.get_local_transactions());
                   let ?trn = ledger[1].transfer;
 
-                    assertAllTrue([
-                    res[0].transfer_result == #Ok(1),
-                    res[1].transfer_result == #Ok(2),
-                    res[2].transfer_result == #Ok(3),
+                  assertAllTrue([
+                    res[0] == ?#Ok(1),
+                    res[1] == ?#Ok(2),
+                    res[2] == ?#Ok(3),
                     ledger[2].transfer == ?{amount = 2 * e8s; to = user3}
                   ]);
               }),
@@ -1024,26 +1010,26 @@ module {
                     let mint =  await* icrc1.mint_tokens(canister.owner,
                     { to = user1; amount = tx_amount; memo = null; created_at_time = null; });
 
-                    let batchArgs = {
-                        memo = null;
-                        created_at_time = null;
-                        transfers = [
-                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null },
+                    let batchArgs = [
+                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
+                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
                         ];
-                    };
 
                     let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, ?#Sync(externalCanTransferFalseSync), null);
 
                     D.print("reject sync single " # debug_show(result));
 
-                    let #trappable(#Ok(res)) = result;
+                    let #trappable(res) = result;
                     let ledger = Vector.toArray(icrc1.get_local_transactions());
                     let ?trn = ledger[1].transfer;
 
                       assertAllTrue([
-                      res[0].transfer_result == #Ok(1),
-                      res[1].transfer_result == #Err(#GenericError({error_code=6453; message="always false"})),
+                      res[0] == ?#Ok(1),
+                      res[1] == ?#Err(#GenericError({error_code=6453; message="always false"})),
                       Array.size(ledger) == 2
                     ]);
                 }),
@@ -1056,14 +1042,14 @@ module {
                     let mint =  await* icrc1.mint_tokens(canister.owner,
                     { to = user1; amount = tx_amount; memo = null; created_at_time = null; });
 
-                    let batchArgs = {
-                        memo = null;
-                        created_at_time = null;
-                        transfers = [
-                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null },
+                    let batchArgs = [
+                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
+                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
                         ];
-                    };
 
                   let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, ?#Async(externalCanTransferFalseAsync), null);
 
@@ -1072,13 +1058,13 @@ module {
                     // First transfer
                    D.print("reject async single " # debug_show(result));
 
-                    let #awaited(#Ok(res)) = result;
+                    let #awaited(res) = result;
                     let ledger = Vector.toArray(icrc1.get_local_transactions());
                     let ?trn = ledger[1].transfer;
 
                       assertAllTrue([
-                      res[0].transfer_result == #Ok(1),
-                      res[1].transfer_result == #Err(#GenericError({error_code=6453; message="always false"})),
+                      res[0] == ?#Ok(1),
+                      res[1] == ?#Err(#GenericError({error_code=6453; message="always false"})),
                       Array.size(ledger) == 2
                     ]);
                 }),
@@ -1090,18 +1076,18 @@ module {
 
                     let mint =  await* icrc1.mint_tokens(canister.owner, { to = user1; amount = tx_amount; memo = null; created_at_time = null; });
 
-                    let batchArgs = {
-                        memo = null;
-                        created_at_time = null;
-                        transfers = [
-                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null },
+                    let batchArgs =[
+                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
+                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
                         ];
-                    };
 
                   let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, ?#Sync(externalCanTransferUpdateSync), null);
 
-                    let #trappable(#Ok(res)) = result;
+                    let #trappable(res) = result;
                     let ledger = Vector.toArray(icrc1.get_local_transactions());
                     let ?trn = ledger[1].transfer;
                     let ?trn2 = ledger[1].transfer;
@@ -1119,20 +1105,20 @@ module {
 
                     let mint =  await* icrc1.mint_tokens( canister.owner, { to = user1; amount = tx_amount; memo = null; created_at_time = null; },);
 
-                    let batchArgs = {
-                        memo = null;
-                        created_at_time = null;
-                        transfers = [
-                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null },
-                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null },
+                    let batchArgs = [
+                            { from_subaccount = user1.subaccount; to = user2; amount = 1 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
+                            { from_subaccount = user1.subaccount; to = user3; amount = 2 * e8s; fee = null;
+                            memo = null;
+                            created_at_time = null; },
                         ];
-                    };
 
                     let result = await* icrc4.transfer_batch_tokens(user1.owner, batchArgs, ?#Async(externalCanTransferUpdateAsync), null);
 
                 
                     
-                    let #awaited(#Ok(res)) = result;
+                    let #awaited(res) = result;
                     let ledger = Vector.toArray(icrc1.get_local_transactions());
                     let ?trn = ledger[1].transfer;
                     let ?trn2 = ledger[1].transfer;
@@ -1150,18 +1136,21 @@ module {
                       let mint_args = { to = user1; amount = 100 * e8s; memo = null; created_at_time = null; };
                       ignore await* icrc1.mint_tokens(canister.owner, mint_args);
 
-                      let batchArgs = {
-                          memo = null;
-                          created_at_time = null;
-                          transfers = [
-                              { from_subaccount = user1.subaccount; to = user2; amount = 10 * e8s; fee = null },
-                               { from_subaccount = user1.subaccount; to = user3; amount = 10 * e8s; fee = null },
-                                { from_subaccount = user1.subaccount; to = user2; amount = 4 * e8s; fee = null },
+                      let batchArgs = [
+                              { from_subaccount = user1.subaccount; to = user2; amount = 10 * e8s; fee = null;
+                              memo = null;
+                              created_at_time = null; },
+                               { from_subaccount = user1.subaccount; to = user3; amount = 10 * e8s; fee = null;
+                              memo = null;
+                              created_at_time = null; },
+                              { from_subaccount = user1.subaccount; to = user2; amount = 4 * e8s; fee = null;
+                              memo = null;
+                              created_at_time = null; },
                           ];
-                      };
 
                       var listener_called = false;
-                      icrc4.register_transfer_batch_listener("test_listener", func (notification: ICRC4.TransferBatchNotification, results: ICRC4.TransferBatchResult) {
+
+                      icrc4.register_transfer_batch_listener("test_listener", func (notification: ICRC4.TransferBatchNotification, results: ICRC4.TransferBatchResults) {
                           listener_called := true;
                       });
 
@@ -1184,19 +1173,29 @@ module {
 
                       ignore icrc1.update_ledger_info([#MaxMemo(16)]);
 
-                      let batchArgs = {
-                          memo = ?Blob.fromArray([0,0,0,0,0,0,0,1,
+                      let batchArgs = [
+                              { from_subaccount = user1.subaccount; to = user2; amount = 10 * e8s; fee = null;
+                              memo = ?Blob.fromArray([0,0,0,0,0,0,0,1,
                                                   0,0,0,0,0,0,0,1,
                                                   0,0,0,0,0,0,0,3,
                                                   0,0,0,0,0,0,0,1,
                                                   0,0,0,0,0,0,0,4,]);
-                          created_at_time = null;
-                          transfers = [
-                              { from_subaccount = user1.subaccount; to = user2; amount = 10 * e8s; fee = null },
-                               { from_subaccount = user1.subaccount; to = user3; amount = 10 * e8s; fee = null },
-                                { from_subaccount = user1.subaccount; to = user2; amount = 4 * e8s; fee = null },
+                              created_at_time = null; },
+                              { from_subaccount = user1.subaccount; to = user3; amount = 10 * e8s; fee = null;
+                              memo = ?Blob.fromArray([0,0,0,0,0,0,0,1,
+                                                  0,0,0,0,0,0,0,1,
+                                                  0,0,0,0,0,0,0,3,
+                                                  0,0,0,0,0,0,0,1,
+                                                  0,0,0,0,0,0,0,4,]);
+                              created_at_time = null; },
+                              { from_subaccount = user1.subaccount; to = user2; amount = 4 * e8s; fee = null;
+                              memo = ?Blob.fromArray([0,0,0,0,0,0,0,1,
+                                                  0,0,0,0,0,0,0,1,
+                                                  0,0,0,0,0,0,0,3,
+                                                  0,0,0,0,0,0,0,1,
+                                                  0,0,0,0,0,0,0,4,]);
+                              created_at_time = null; },
                           ];
-                      };
 
                       
 
@@ -1205,9 +1204,9 @@ module {
                        // First transfer
                       D.print("reject memo " # debug_show(result));
 
-                      let #Err(#GenericError(res)) = result;
+                      let ?#Err(#GenericError(err)) = result[0];
 
-                      assertAllTrue([res.error_code == 4]);
+                      assertAllTrue([err.error_code == 4]);
                   }),
             ],
         );

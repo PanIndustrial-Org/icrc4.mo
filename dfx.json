@@ -1,9 +1,9 @@
 {
     "version": 1,
     "canisters": {
-        "icrc2": {
+        "icrc4": {
             "type": "motoko",
-            "main": "src/ICRC2/Canisters/Token.mo"
+            "main": "src/ICRC4/Canisters/Token.mo"
         },
 
         "test": {

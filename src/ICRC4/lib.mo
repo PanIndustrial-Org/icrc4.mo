@@ -94,20 +94,19 @@ module {
   /// - Additional fields may include `fee`, `memo`, and timestamps.
   public type TransferBatchNotification = MigrationTypes.Current.TransferBatchNotification;
 
-
   public type CanBatchTransfer = MigrationTypes.Current.CanBatchTransfer;
 
-  public type TransferBatchResultItem = MigrationTypes.Current.TransferBatchResultItem;
+  public type TransferBatchResults = MigrationTypes.Current.TransferBatchResults;
+  public type TransferBatchResult = MigrationTypes.Current.TransferBatchResult;
   
 
   public type LedgerInfo = MigrationTypes.Current.LedgerInfo;
   public type Stats = MigrationTypes.Current.Stats;
 
-  public type TransferArg = MigrationTypes.Current.TransferArg;
+  public type TransferArgs = MigrationTypes.Current.TransferArgs;
   public type TransferError = ICRC1.TransferError;
   public type TransferBatchArgs = MigrationTypes.Current.TransferBatchArgs;
   public type TransferBatchError = MigrationTypes.Current.TransferBatchError;
-  public type TransferBatchResult = MigrationTypes.Current.TransferBatchResult;
 
   public type BalanceQueryArgs = MigrationTypes.Current.BalanceQueryArgs;
   public type BalanceQueryResult = MigrationTypes.Current.BalanceQueryResult;
@@ -231,8 +230,6 @@ module {
       return state.ledger_info;
     };
 
-    
-
     /// # `get_state`
     ///
     /// Acquires the current state of the ledger, which reflects all the approvals and the setup of the ledger,
@@ -261,12 +258,11 @@ module {
       /// Returns:
       /// `MetaData`: A record containing all metadata entries for this ledger.
       public func metadata() : [ICRC1.MetaDatum] {
-         let md = switch(state.ledger_info.metadata){
-          case(?val)val;
+         switch(state.ledger_info.metadata){
+          case(?val) {};
           case(null) {
             let newdata = init_metadata();
             state.ledger_info.metadata := ?newdata;
-            newdata
           };
          };
 
@@ -302,7 +298,6 @@ module {
             ignore Map.put(results, Map.thash, thisItem.0, thisItem);
           };
 
-          let metadata = Vec.new<ICRC1.MetaDatum>();
           ignore Map.put(results, Map.thash, "icrc4:max_balances",("icrc4:max_balances", #Nat(state.ledger_info.max_balances)));
           ignore Map.put(results, Map.thash,"icrc4:max_transfers", ("icrc4:max_transfers", #Nat(state.ledger_info.max_transfers)));
 
@@ -399,24 +394,14 @@ module {
     /// exactness (if `expected_allowance` is provided), along with tests for memo size, expiration, and creation
     /// timestamp validity.
     public func validate_transfer_batch( transfer : TransferBatchNotification
-          ): Result.Result<TransferBatchResult, Text>{
+          ): Result.Result<TransferBatchResults, TransferBatchResults>{
 
       if(transfer.transfers.size() >= state.ledger_info.max_transfers){
-        return #ok(#Err(#TooManyRequests({limit = state.ledger_info.max_transfers})))
+        //this iteration of icrc4 does process any transactions if the limit is exceeded.
+        return #err([?#Err(#TooManyRequests({limit = state.ledger_info.max_transfers}))]);
       };
 
-
-      //test that the memo is not too large
-      let ?(memo) = environment.icrc1.testMemo(transfer.memo) else return #ok(#Err(#GenericError({error_code = 4; message ="invalid memo. must be less than " # debug_show(environment.icrc1.get_state().max_memo) # " bits"})));
-
-      //make sure the approval is not too old or too far in the future
-      let created_at_time = switch(environment.icrc1.testCreatedAt(transfer.created_at_time)){
-        case(#ok(val)) val;
-        case(#Err(#TooOld)) return #ok(#Err(#TooOld));
-        case(#Err(#InTheFuture(val))) return  #ok(#Err(#CreatedInFuture({ledger_time = environment.icrc1.get_time64()})));
-      };
-
-      return #ok(#Ok([]));
+      return #ok([]);
 
     };
 
@@ -487,25 +472,22 @@ module {
     /// ## Remarks
     ///
     /// This function combines validation with actual state changes, fee deductions, and transaction logging. When the transfer is complete, event listeners are notified of the change, and the internal approval state is updated to reflect the new balances.
-    public func transfer_batch_tokens(caller: Principal, transferBatchArgs: TransferBatchArgs, can_transfer : ICRC1.CanTransfer, can_batch_transfer : CanBatchTransfer) : async* Star.Star<TransferBatchResult, Text> {
+    public func transfer_batch_tokens(caller: Principal, transferBatchArgs: TransferBatchArgs, can_transfer : ICRC1.CanTransfer, can_batch_transfer : CanBatchTransfer) : async* Star.Star<TransferBatchResults, TransferBatchResults> {
 
         let icrc1 = environment.icrc1;
 
-        var memoBlock : ?Nat = null;
+        let results = Vec.new<?TransferBatchResult>();
 
         let pre_notification = {
-          transferBatchArgs with 
+          transfers = transferBatchArgs; 
           from = caller;
         };
 
         switch(validate_transfer_batch(pre_notification)){
           case(#err(err)){
-            return #trappable(#Err(#GenericError({message=err; error_code=1})));
+            return #trappable(err);
           };
-          case(#ok(#Err(err))){
-            return #trappable(#Err(err));
-          };
-          case(#ok(#Ok(val))){};
+          case(#ok(val)){};
         };
 
         var bAwaited = false;
@@ -517,21 +499,21 @@ module {
               
               //revalidate 
               switch (validate_transfer_batch(val)) {
-                case (#err(errorType)) {
-                    return #awaited(#Err(#GenericError({error_code = 8586; message = errorType})));
+                case (#err(errors)) {
+                    return #awaited(errors);
                 };
                 case (#ok(_)) {};
               };
               val;
             };
             case(#err(val)){
-              return val;
+              return #err(val);
             };
           };
 
         
 
-        let results = Vec.new<TransferBatchResultItem>();
+        
 
         label proc for(thisItem in notification.transfers.vals()){
 
@@ -540,27 +522,22 @@ module {
             subaccount = thisItem.from_subaccount;
           };
 
-          let args = {
-            thisItem with
-            memo = null; //will be handled later
-            created_at_time = notification.created_at_time;
-          };
 
           let tx_kind = if (ICRC1.account_eq(from, icrc1.get_state().minting_account)) {
             #mint;
-          } else if (ICRC1.account_eq(args.to, icrc1.get_state().minting_account)) {
+          } else if (ICRC1.account_eq(thisItem.to, icrc1.get_state().minting_account)) {
             #burn;
           } else {
             #transfer;
           };
 
-          let tx_req = ICRC1.UtilsHelper.create_transfer_req(args, caller, tx_kind);
+          let tx_req = ICRC1.UtilsHelper.create_transfer_req(thisItem, caller, tx_kind);
 
           //when we create the transfer we should calculate the required fee. This should only be done once and used throughout the rest of the calcualtion
 
           let calculated_fee = switch(tx_req.kind){
             case(#transfer){
-              get_fee(notification, args);
+              get_fee(notification, thisItem);
             };
             case(_){
               0;
@@ -570,7 +547,7 @@ module {
           debug if (debug_channel.transfer) D.print("validating");
           switch (icrc1.validate_request(tx_req, calculated_fee, false)) {
               case (#err(errorType)) {
-                  Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = #Err(errorType)});
+                  Vec.add<?TransferBatchResult>(results, ?#Err(errorType));
                   continue proc;
               };
               case (#ok(_)) {};
@@ -584,8 +561,6 @@ module {
             calculated_fee = calculated_fee;
           };
 
-          
-
           let (finaltx, finaltxtop, notification_token) : (Value, ?Value, ICRC1.TransactionRequestNotification) = switch(await* icrc1.handleCanTransfer(txMap, ?txTopMap, pre_notification_token, can_transfer)){
             case(#trappable(val)) val;
             case(#awaited(val)){
@@ -594,7 +569,7 @@ module {
               //revalidate 
               switch (icrc1.validate_request(val.2, override_fee, false)) {
                 case (#err(errorType)) {
-                  Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = #Err(errorType)});
+                  Vec.add<?TransferBatchResult>(results, ?#Err(errorType));
                   continue proc;
                 };
                 case (#ok(_)) {};
@@ -603,13 +578,13 @@ module {
             };
             case(#err(#trappable(val))){
               debug if (debug_channel.transfer) D.print("handleCanTransfer gave us a trappable error of " # debug_show(val));
-              Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = val});
+              Vec.add<?TransferBatchResult>(results, ?val);
               continue proc;
             };
             case(#err(#awaited(val))){
               debug if (debug_channel.transfer) D.print("handleCanTransfer gave us an awaited error of " # debug_show(val));
               bAwaited := true;
-              Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = val});
+              Vec.add<?TransferBatchResult>(results, ?val);
               continue proc;
             };
           };
@@ -647,7 +622,7 @@ module {
                         finaltxtop_var := switch(icrc1.handleFeeCollector(final_fee, val, notification_token, finaltxtop)){
                           case(#ok(val)) val;
                           case(#err(err)){
-                            Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = #Err(#GenericError({error_code= 6453; message=err}))});
+                            Vec.add<?TransferBatchResult>(results, ?#Err(#GenericError({error_code= 6453; message=err})));
                             continue proc;
                           };
                         };
@@ -657,34 +632,12 @@ module {
               };
           };
 
-          switch(notification.memo){
-            case(?memo){
-              switch(handleBatchMemo(memo, memoBlock,finaltx_var, finaltxtop_var)){
-                case(#ok(txval, txtopval)){
-                  finaltxtop_var := txtopval;
-                  finaltx_var := txval;
-                };
-                case(#err(err)){
-                  Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = #Err(#GenericError({error_code= 6453; message=err}))});
-                            continue proc;
-                };
-              }
-            };
-            case(_){};
-          };
-
           // store transaction
           let index = icrc1.handleAddRecordToLedger(finaltx_var, finaltxtop_var, notification_token);
 
           let tx_final = ICRC1.UtilsHelper.req_to_tx(notification_token, index);
 
           if(calculated_fee > 0) icrc1.setFeeCollectorBlock(index);
-
-          if(notification.memo != null and memoBlock == null){
-            debug if (debug_channel.transfer)D.print("recording  the memo block" # debug_show(memoBlock, index));
-
-            memoBlock := ?index;
-          };
 
           //add trx for dedupe
           let trxhash = Blob.fromArray(RepIndy.hash_val(finaltx_var));
@@ -696,22 +649,22 @@ module {
           icrc1.handleBroadcastToListeners(tx_final, index);
 
           debug if (debug_channel.transfer)D.print("done transfer");
-          Vec.add<TransferBatchResultItem>(results, {transfer = thisItem; transfer_result = #Ok(index)});
+          Vec.add<?TransferBatchResult>(results, ?#Ok(index));
         };
 
-       icrc1.handleCleanUp();
+       icrc1.handleCleanUp<system>();
 
        let finalResults = Vec.toArray(results);
 
        debug if (debug_channel.transfer)D.print("attempting to call listeners" # debug_show(Vec.size(transfer_batch_listeners)));
         for(thisItem in Vec.vals(transfer_batch_listeners)){
-          thisItem.1(notification, #Ok(finalResults));
+          thisItem.1(notification, finalResults);
         };
 
        return if(bAwaited){
-          #awaited(#Ok(finalResults));
+          #awaited(finalResults);
        } else {
-          #trappable(#Ok(finalResults));
+          #trappable(finalResults);
        };
     };
 
@@ -763,7 +716,7 @@ module {
       /// - Returns the original data if no additional rules are provided.
       /// - On calling a synchronous validation function, returns the result or any encountered error.
       /// - On calling an asynchronous validation function, either returns the result or goes into a waiting state for further handling.
-      public func handleCanBatchTransfer(pre_notification: TransferBatchNotification, canBatchTransfer : CanBatchTransfer) : async* Star.Star<(TransferBatchNotification), MigrationTypes.Current.TransferBatchResult> {
+      public func handleCanBatchTransfer(pre_notification: TransferBatchNotification, canBatchTransfer : CanBatchTransfer) : async* Star.Star<(TransferBatchNotification), MigrationTypes.Current.TransferBatchResults> {
         switch(canBatchTransfer){
             case(null){
               #trappable(pre_notification);
@@ -771,7 +724,7 @@ module {
             case(?#Sync(remote_func)){
               switch(remote_func(pre_notification)){
                 case(#ok(val)) return #trappable(val);
-                case(#err(tx)) return #err(#trappable(#Err(#GenericError({error_code= 9453; message=tx}))));
+                case(#err(tx)) return #err(#trappable(tx));
               };
             };
             case(?#Async(remote_func)){
@@ -782,10 +735,10 @@ module {
                   #awaited(val);
                 };
                 case(#err(#awaited(tx))){
-                  return #err(#awaited(#Err(#GenericError({error_code= 9453; message=tx}))));
+                  return #err(#awaited(tx));
                 };
                 case(#err(#trappable(tx))){
-                  return #err(#trappable(#Err(#GenericError({error_code= 9453; message=tx}))));
+                  return #err(#trappable(tx));
                 };
               };
             };
@@ -796,22 +749,22 @@ module {
     /// Simplified function that matchs the icrc4 patter
     /// We encourage you to use transfer_batch_tokens and handle any waited state
     ///
-    public func transfer_batch(caller: Principal, transferBatchArgs: TransferBatchArgs) : async* TransferBatchResult {
+    public func transfer_batch(caller: Principal, transferBatchArgs: TransferBatchArgs) : async* TransferBatchResults {
       switch( await* transfer_batch_tokens(caller, transferBatchArgs, null, null)){
           case(#trappable(val)) val;
           case(#awaited(val)) val;
-          case(#err(#trappable(err))) D.trap(err);
-          case(#err(#awaited(err))) D.trap(err);
+          case(#err(#trappable(err))) err;
+          case(#err(#awaited(err))) err;
         };
     };
 
     public func balance_of_batch_tokens(args : BalanceQueryArgs) : Result.Result<BalanceQueryResult, Text>{
-      let results = ICRC1.Vector.new<(Account, Nat)>();
+      let results = ICRC1.Vector.new<Nat>();
 
       if(args.accounts.size() > state.ledger_info.max_balances) return #err("too many requests. allowed:" # debug_show(state.ledger_info.max_balances));
 
       for(thisItem in args.accounts.vals()){
-        ICRC1.Vector.add<(Account, Nat)>(results, (thisItem, environment.icrc1.balance_of(thisItem)));
+        ICRC1.Vector.add<Nat>(results, environment.icrc1.balance_of(thisItem));
       };
 
       return #ok(ICRC1.Vector.toArray(results));
@@ -856,7 +809,7 @@ module {
 
     ignore environment.icrc1.register_supported_standards({
         name = "ICRC-4";
-        url = "https://github.com/dfinity/ICRC-1/blob/main/standards/ICRC-4/";
+        url = "https://github.com/dfinity/ICRC/ICRCs/ICRC-4/";
     });
 
 

@@ -35,22 +35,18 @@ module {
   public type Subaccount = Blob;
 
   ///Note: these are different than the ICRC1 Transfer args
-  public type TransferArg =  {
-    from_subaccount: ?Subaccount;
-    to: Account;
-    amount: Nat;
-    fee: ?Nat
-  };
+  public type TransferArgs =  ICRC1.TransferArgs;
 
   /// Provides the input to a batch transaction
-  public type TransferBatchArgs =  {
-      transfers: [TransferArg];
-      memo: ?Blob;      // A single memo for batch-level deduplication
-      created_at_time: ?Nat64;
-  };
+  public type TransferBatchArgs =  [TransferArgs];
 
   ///Possible Errors
   public type TransferBatchError = {
+      #BadBurn : {min_burn_amount : Nat};
+      #BadFee : { expected_fee : Nat };
+      #InsufficientFunds : { balance : Nat };
+      #GenericBatchError : { error_code : Nat; message : Text };
+      
       #TemporarilyUnavailable;
       #TooOld;
       #TooManyRequests : { limit: Nat };
@@ -59,25 +55,19 @@ module {
       #GenericError : { error_code : Nat; message : Text };
   };
 
-  public type TransferBatchResultItem = {
-    transfer : TransferArg; //todo: do we need this?  Can we leave out memo? or is it helpful
-    transfer_result : {
-      #Ok : Nat; // Transaction indices for successful transfers
-      #Err : ICRC1.TransferError
-    };
-  };
-
   public type TransferBatchResult = {
-      #Ok : [TransferBatchResultItem];
+      #Ok : Nat;
       #Err : TransferBatchError;
   };
+
+  public type TransferBatchResults = [?TransferBatchResult];
 
   public type BalanceQueryArgs = {
     accounts: [Account];
   };
 
 
-  public type BalanceQueryResult = [(Account, Nat)];
+  public type BalanceQueryResult = [Nat];
 
   /// Stats contains general statistics about the ledger and approvals in the system.
   public type Stats = {
@@ -100,18 +90,16 @@ module {
   /// `TransferBatchNotification`
   ///
   /// Represents the notification for a batch transaction request
-  public type TransferBatchNotification = {
-    from : Principal;
-    transfers : [TransferArg];
-    memo : ?Blob;
-    created_at_time : ?Nat64;
+  public type TransferBatchNotification =  {
+    from: Principal;
+    transfers: [TransferArgs]
   };
 
-  public type TransferBatchListener = (notification: TransferBatchNotification, results: TransferBatchResult) -> ();
+  public type TransferBatchListener = (notification: TransferBatchNotification, results: TransferBatchResults) -> ();
 
   public type CanBatchTransfer = ?{
-    #Sync : (notification: TransferBatchNotification) -> Result.Result<TransferBatchNotification, Text>;
-    #Async : (notification: TransferBatchNotification) -> async* Star.Star<TransferBatchNotification, Text>;
+    #Sync : (notification: TransferBatchNotification) -> Result.Result<TransferBatchNotification, TransferBatchResults>;
+    #Async : (notification: TransferBatchNotification) -> async* Star.Star<TransferBatchNotification, TransferBatchResults>;
   };
 
   
@@ -126,7 +114,7 @@ module {
     
   };
 
-  public type GetFee = (State, Environment, TransferBatchArgs, ICRC1.TransferArgs) -> Balance;
+  public type GetFee = (State, Environment, TransferBatchNotification, ICRC1.TransferArgs) -> Balance;
 
   /// Value is a generic type capable of representing different values in a shared data structure.
   public type Value = {
@@ -174,6 +162,13 @@ module {
   /// State represents the entire state of the ledger, containing ledger configurations, approvals, and indices.
   public type State = {
     ledger_info : LedgerInfo;
+  };
+
+  public type Service = actor {
+    icrc4_transfer_batch : (TransferBatchArgs) -> async TransferBatchResults;
+    icrc4_balance_of_batch : query (BalanceQueryResult) -> async  BalanceQueryResult;
+    icrc4_maximum_update_batch_size : query (Nat) -> async ?Nat;
+    icrc4_maximum_query_batch_size : query (Nat) -> async ?Nat;
   };
 
 
