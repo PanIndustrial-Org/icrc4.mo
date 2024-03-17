@@ -95,11 +95,11 @@ module {
     transfers: [TransferArgs]
   };
 
-  public type TransferBatchListener = (notification: TransferBatchNotification, results: TransferBatchResults) -> ();
+  public type TransferBatchListener = <system>(notification: TransferBatchNotification, results: TransferBatchResults) -> ();
 
   public type CanBatchTransfer = ?{
-    #Sync : (notification: TransferBatchNotification) -> Result.Result<TransferBatchNotification, TransferBatchResults>;
-    #Async : (notification: TransferBatchNotification) -> async* Star.Star<TransferBatchNotification, TransferBatchResults>;
+    #Sync : <system>(notification: TransferBatchNotification) -> Result.Result<TransferBatchNotification, TransferBatchResults>;
+    #Async : <system>(notification: TransferBatchNotification) -> async* Star.Star<TransferBatchNotification, TransferBatchResults>;
   };
 
   

@@ -151,7 +151,7 @@ module {
           (icrc1, icrc4);
         };
 
-        let externalCanTransferBatchFalseSync = func ( notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
+        let externalCanTransferBatchFalseSync = func <system>( notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
 
             
                 return #err([?#Err(#GenericError({message = "always false"; error_code = 0}))]);
@@ -161,7 +161,7 @@ module {
             
         };
 
-        let externalCanTransferBatchFalseAsync = func (notification: ICRC4.TransferBatchNotification) : async* Star.Star<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
+        let externalCanTransferBatchFalseAsync = func <system>(notification: ICRC4.TransferBatchNotification) : async* Star.Star<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
             // This mock externalCanTransfer function always returns false,
             // indicating the transfer should not proceed.
             let fake = await Fake.Fake();
@@ -171,7 +171,7 @@ module {
             
         };
 
-        let externalCanTransfeBatchUpdateSync = func (notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
+        let externalCanTransfeBatchUpdateSync = func <system>(notification: ICRC4.TransferBatchNotification) : Result.Result<( notification: ICRC4.TransferBatchNotification), ICRC4.TransferBatchResults> {
 
             let transfers = Vec.new<ICRC4.TransferArgs>();
             for(thisItem in notification.transfers.vals()){
@@ -192,7 +192,7 @@ module {
             });
         };
 
-        let externalCanTransferBatchUpdateAsync = func ( notification: ICRC4.TransferBatchNotification) : async* Star.Star<ICRC4.TransferBatchNotification, ICRC4.TransferBatchResults> {
+        let externalCanTransferBatchUpdateAsync = func <system>( notification: ICRC4.TransferBatchNotification) : async* Star.Star<ICRC4.TransferBatchNotification, ICRC4.TransferBatchResults> {
             let fake = await Fake.Fake();
             let transfers = Vec.new<ICRC4.TransferArgs>();
             for(thisItem in notification.transfers.vals()){
@@ -213,7 +213,7 @@ module {
             });
         };
 
-        let externalCanTransferFalseSync = func (trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : Result.Result<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
+        let externalCanTransferFalseSync = func <system>(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : Result.Result<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
 
             switch(notification.kind){
               case(#transfer(val)){
@@ -228,7 +228,7 @@ module {
             return #ok(trx, trxtop, notification);
         };
 
-        let externalCanTransferFalseAsync = func (trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : async* Star.Star<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
+        let externalCanTransferFalseAsync = func <system>(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : async* Star.Star<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
             // This mock externalCanTransfer function always returns false,
             // indicating the transfer should not proceed.
             let fake = await Fake.Fake();
@@ -243,7 +243,7 @@ module {
              return #awaited(trx, trxtop, notification);
         };
 
-        let externalCanTransferUpdateSync = func (trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : Result.Result<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
+        let externalCanTransferUpdateSync = func <system>(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : Result.Result<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
             let results = Vector.new<(Text,ICRC1.Value)>();
             switch(notification.kind){
               case(#transfer){};
@@ -269,7 +269,7 @@ module {
             });
         };
 
-        let externalCanTransferUpdateAsync = func (trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : async* Star.Star<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
+        let externalCanTransferUpdateAsync = func <system>(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification) : async* Star.Star<(trx: ICRC1.Value, trxtop: ?ICRC1.Value, notification: ICRC1.TransactionRequestNotification), Text> {
             let fake = await Fake.Fake();
             switch(notification.kind){
               case(#transfer){};
@@ -1150,12 +1150,12 @@ module {
 
                       var listener_called = false;
 
-                      icrc4.register_transfer_batch_listener("test_listener", func (notification: ICRC4.TransferBatchNotification, results: ICRC4.TransferBatchResults) {
+                      icrc4.register_transfer_batch_listener("test_listener", func <system>(notification: ICRC4.TransferBatchNotification, results: ICRC4.TransferBatchResults) {
                           listener_called := true;
                       });
 
                       var trx_called = 0;
-                      icrc1.register_token_transferred_listener("test_listener", func (tx: ICRC1.Transaction, tx_id: Nat) {
+                      icrc1.register_token_transferred_listener("test_listener", func <system>(tx: ICRC1.Transaction, tx_id: Nat) {
                           trx_called += 1;
                       });
 
