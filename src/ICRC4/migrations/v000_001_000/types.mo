@@ -3,9 +3,7 @@
 // you should also avoid importing these types anywhere in your project directly from here
 // use MigrationTypes.Current property instead
 
-import D "mo:base/Debug";
 import Blob "mo:base/Blob";
-import Order "mo:base/Order";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Star "mo:star/star";

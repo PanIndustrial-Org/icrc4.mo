@@ -1,22 +1,14 @@
-import Array "mo:base/Array";
 import Blob "mo:base/Blob";
 import D "mo:base/Debug";
-import EC "mo:base/ExperimentalCycles";
-import Float "mo:base/Float";
-import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
-import Nat8 "mo:base/Nat8";
-import Option "mo:base/Option";
-import Order "mo:base/Order";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
-import Timer "mo:base/Timer";
 
 import ICRC1 "mo:icrc1-mo/ICRC1/";
-import Itertools "mo:itertools/Iter";
+
 import RepIndy "mo:rep-indy-hash";
 import Star "mo:star/star";
 import Vec "mo:vector";
@@ -633,7 +625,7 @@ module {
           };
 
           // store transaction
-          let index = icrc1.handleAddRecordToLedger(finaltx_var, finaltxtop_var, notification_token);
+          let index = icrc1.handleAddRecordToLedger<system>(finaltx_var, finaltxtop_var, notification_token);
 
           let tx_final = ICRC1.UtilsHelper.req_to_tx(notification_token, index);
 
@@ -646,7 +638,7 @@ module {
 
           ignore Map.put<Blob, (Nat64, Nat)>(icrc1.get_state().recent_transactions, Map.bhash, trxhash, (icrc1.get_time64(), index));
 
-          icrc1.handleBroadcastToListeners(tx_final, index);
+          icrc1.handleBroadcastToListeners<system>(tx_final, index);
 
           debug if (debug_channel.transfer)D.print("done transfer");
           Vec.add<?TransferBatchResult>(results, ?#Ok(index));
@@ -658,7 +650,7 @@ module {
 
        debug if (debug_channel.transfer)D.print("attempting to call listeners" # debug_show(Vec.size(transfer_batch_listeners)));
         for(thisItem in Vec.vals(transfer_batch_listeners)){
-          thisItem.1(notification, finalResults);
+          thisItem.1<system>(notification, finalResults);
         };
 
        return if(bAwaited){
@@ -681,6 +673,7 @@ module {
       ///
       /// Remarks:
       /// - The first time through the memo will be written to the transaction. Subsiquent items will be written to memo-block at the top layer.
+      /*
     public func handleBatchMemo(memo: Blob, memoBlock : ?Nat, tx: Value, txtop : ?Value) : Result.Result<(Value,?Value), Text> {
         var finaltxtop_var = txtop;
         var finaltx_var = tx;
@@ -701,6 +694,7 @@ module {
 
         #ok(finaltx_var, finaltxtop_var);
       };
+      */
 
 
       /// Evaluates additional transfer batch validation rules if provided.
@@ -722,7 +716,7 @@ module {
               #trappable(pre_notification);
             };
             case(?#Sync(remote_func)){
-              switch(remote_func(pre_notification)){
+              switch(remote_func<system>(pre_notification)){
                 case(#ok(val)) return #trappable(val);
                 case(#err(tx)) return #err(#trappable(tx));
               };
