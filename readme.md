@@ -1,6 +1,6 @@
 # ICRC-4: Batch Transactions Class for Motoko
 
-## Warning - This is an alpha release. It has not been audited and should not be used in production. The ICRC-4 Standard has not be approved by the ICRC Ledger Working group at this time.
+## Warning - While this this module has been running in production for over a year, It has not been audited and you should use it at your own risk.  If you would like to contribute to getting the library audited, please send an email to austin at panindustrial dot com.
 
 ## Introduction to ICRC-4 Class
 

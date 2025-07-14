@@ -6,8 +6,8 @@ import Opt "mo:base/Option";
 import Itertools "mo:itertools/Iter";
 
 import Vec "mo:vector";
-import Map "mo:map9/Map";
-import Set "mo:map9/Set";
+import Map "mo:map/Map";
+import Set "mo:map/Set";
 
 module {
 
